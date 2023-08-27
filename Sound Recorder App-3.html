@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sound Recorder App</title>
+</head>
+<body>
+<h1>Sound Recorder App</h1>
+<button id="startButton">Start Recording</button>
+<button id="stopButton">Stop Recording</button>
+<a id="downloadLink" style="display: none;">Download Recorded Audio</a>
+<br>
+<label for="echoLevel">Echo Level:</label>
+<input type="range" id="echoLevel" min="0" max="1" step="0.01" value="0.5">
+<br>
+<label for="reverbLevel">Reverb Level:</label>
+<input type="range" id="reverbLevel" min="0" max="1" step="0.01" value="0.5">
+
+<script>
+const startButton = document.getElementById('startButton');
+const stopButton = document.getElementById('stopButton');
+const downloadLink = document.getElementById('downloadLink');
+const echoLevelInput = document.getElementById('echoLevel');
+const reverbLevelInput = document.getElementById('reverbLevel');
+
+let mediaRecorder;
+let audioChunks = [];
+let audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let analyser = audioContext.createAnalyser();
+analyser.connect(audioContext.destination);
+
+startButton.addEventListener('click', async () => {
+  audioChunks = [];
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  mediaRecorder = new MediaRecorder(stream);
+
+  mediaRecorder.ondataavailable = event => {
+    if (event.data.size > 0) {
+      audioChunks.push(event.data);
+    }
+  };
+
+  mediaRecorder.onstop = () => {
+    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    downloadLink.href = audioUrl;
+    downloadLink.download = 'recorded_audio.wav';
+    downloadLink.style.display = 'block';
+  };
+
+  mediaRecorder.start();
+  startButton.disabled = true;
+  stopButton.disabled = false;
+});
+
+stopButton.addEventListener('click', () => {
+  mediaRecorder.stop();
+  startButton.disabled = false;
+  stopButton.disabled = true;
+});
+
+echoLevelInput.addEventListener('input', () => {
+  const echoNode = audioContext.createDelay();
+  echoNode.delayTime.value = 0.2;
+  const gainNode = audioContext.createGain();
+  gainNode.gain.value = parseFloat(echoLevelInput.value);
+  echoNode.connect(gainNode);
+  analyser.connect(echoNode);
+});
+
+reverbLevelInput.addEventListener('input', () => {
+  const convolver = audioContext.createConvolver();
+  convolver.buffer = getReverbBuffer();
+  const gainNode = audioContext.createGain();
+  gainNode.gain.value = parseFloat(reverbLevelInput.value);
+  convolver.connect(gainNode);
+  analyser.connect(convolver);
+});
+
+function getReverbBuffer() {
+  const bufferLength = audioContext.sampleRate * 2;
+  const impulseBuffer = audioContext.createBuffer(2, bufferLength, audioContext.sampleRate);
+  for (let channel = 0; channel < 2; channel++) {
+    const channelData = impulseBuffer.getChannelData(channel);
+    for (let i = 0; i < bufferLength; i++) {
+      channelData[i] = Math.random() * 2 - 1;
+    }
+  }
+  return impulseBuffer;
+}
+</script>
+</body>
+</html>
